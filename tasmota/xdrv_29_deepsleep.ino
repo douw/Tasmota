@@ -136,7 +136,12 @@ void DeepSleepPrepare(void)
     // ensure nextwakeup is at least in the future
 #ifdef USE_DEEPSLEEP_LOCALTIME
   #ifdef USE_DEEPSLEEP_OFFSET
-    RtcSettings.nextwakeup += LocalTime() + DEEPSLEEP_MIN_TIME;
+    if (RtcSettings.nextwakeup == 0) {
+      RtcSettings.nextwakeup += LocalTime() + DEEPSLEEP_MIN_TIME + Settings.deepsleep;  
+    }
+    else {
+      RtcSettings.nextwakeup += LocalTime() + DEEPSLEEP_MIN_TIME;
+    }
   #else
     RtcSettings.nextwakeup += (((LocalTime() + DEEPSLEEP_MIN_TIME - RtcSettings.nextwakeup) / Settings.deepsleep) + 1) * Settings.deepsleep;
   #endif

@@ -94,7 +94,7 @@ bool DeviceGroupItemShared(bool incoming, uint8_t item)
     mask = DGR_SHARE_POWER;
   else if (item == DGR_ITEM_LIGHT_SCHEME)
     mask = DGR_SHARE_LIGHT_SCHEME;
-  else if (item == DGR_ITEM_LIGHT_FIXED_COLOR || DGR_ITEM_LIGHT_CHANNELS)
+  else if (item == DGR_ITEM_LIGHT_FIXED_COLOR || item == DGR_ITEM_LIGHT_CHANNELS)
     mask = DGR_SHARE_LIGHT_COLOR;
   else if (item == DGR_ITEM_LIGHT_FADE || item == DGR_ITEM_LIGHT_SPEED)
     mask = DGR_SHARE_LIGHT_FADE;
@@ -112,7 +112,7 @@ void DeviceGroupsInit(void)
   // If no module set the device group count, ...
   if (!device_group_count) {
 
-    // If relays in sepaate device groups is enabled, set the device group count to highest numbered
+    // If relays in separate device groups is enabled, set the device group count to highest numbered
     // relay.
     if (Settings.flag4.multiple_device_groups) {  // SetOption88 - Enable relays in separate device groups
       for (uint32_t relay_index = 0; relay_index < MAX_RELAYS; relay_index++) {
@@ -128,7 +128,7 @@ void DeviceGroupsInit(void)
   }
 
   // If there are more device group names set than the number of device groups needed by the
-  // mdoule, use the device group name count as the device group count.
+  // module, use the device group name count as the device group count.
   for (; device_group_count < MAX_DEV_GROUP_NAMES; device_group_count++) {
     if (!*SettingsText(SET_DEV_GROUP_NAME1 + device_group_count)) break;
   }
@@ -908,7 +908,7 @@ AddLog_P(LOG_LEVEL_DEBUG, PSTR("DGR: Checking next_check_time=%u, now=%u"), next
       }
 
       // If it's time to send a multicast announcement for this group, send it. This is to
-      // announcement ourself to any members that have somehow not heard about us. We send it at the
+      // announce ourself to any members that have somehow not heard about us. We send it at the
       // announcement interval plus a random number of milliseconds so that even if all the devices
       // booted at the same time, they don't all multicast their announcements at the same time.
 #ifdef DEVICE_GROUPS_DEBUG

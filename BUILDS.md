@@ -28,7 +28,8 @@
 | USE_EXPRESSION        | - | - | - | - | - | - | - |
 | SUPPORT_IF_STATEMENT  | - | - | - | - | - | - | - |
 | USE_HOTPLUG           | - | - | - | - | - | - | - |
-| USE_PROMETHEUS        | - | - | - | - | - | - | - | Enables the `/metrics` endpoint
+| USE_PROMETHEUS        | - | - | - | - | - | - | - |
+| USE_PING              | - | - | - | - | - | - | - |
 |                       |   |   |   |   |   |   |   |
 | Feature or Sensor     | minimal | lite | tasmota | knx | sensors | ir | display | Remarks
 | ROTARY_V1             | - | - | x | - | x | - | - |
@@ -149,6 +150,7 @@
 |                       |   |   |   |   |   |   |   |
 | Feature or Sensor     | minimal | lite | tasmota | knx | sensors | ir | display | Remarks
 | USE_SPI               | - | - | - | - | - | - | x |
+| USE_RC522             | - | - | - | - | - | - | - |
 | USE_MHZ19             | - | - | - | - | x | - | - |
 | USE_SENSEAIR          | - | - | - | - | x | - | - |
 | USE_PMS5003           | - | - | - | - | x | - | - |

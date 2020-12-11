@@ -87,12 +87,13 @@ const static uint8_t* z_dev_start    = z_spi_start + 0x0800;   // 0x402FF800 - 2
 const static size_t   z_spi_len      = 0x1000;   // 4kb blocks
 const static size_t   z_block_offset = 0x0800;
 const static size_t   z_block_len    = 0x0800;   // 2kb
-#else  // ESP32
+#endif  // ESP8266
+#ifdef ESP32
 uint8_t* z_dev_start;
 const static size_t   z_spi_len      = 0x1000;   // 4kb blocks
 const static size_t   z_block_offset = 0x0000;   // No offset needed
 const static size_t   z_block_len    = 0x1000;   // 4kb
-#endif
+#endif  // ESP32
 
 // Each entry consumes 8 bytes
 class Z_Flashentry {
@@ -121,6 +122,7 @@ public:
 
 const static uint32_t ZIGB_NAME1 = 0x3167697A; // 'zig1' little endian
 const static uint32_t ZIGB_NAME2 = 0x3267697A; // 'zig2' little endian, v2
+const static uint32_t ZIGB_DATA2 = 0x32746164; // 'dat2' little endian, v2
 const static size_t   Z_MAX_FLASH = z_block_len - sizeof(Z_Flashentry);  // 2040
 
 bool hibernateDeviceConfiguration(SBuffer & buf, const class Z_Data_Set & data, uint8_t endpoint) {
@@ -189,11 +191,6 @@ class SBuffer hibernateDevices(void) {
     buf.addBuffer(buf_device);
   }
 
-  size_t buf_len = buf.len();
-  if (buf_len > 2040) {
-    AddLog_P(LOG_LEVEL_ERROR, PSTR(D_LOG_ZIGBEE "Devices list too big to fit in Flash (%d)"), buf_len);
-  }
-
   return buf;
 }
 
@@ -207,7 +204,7 @@ const char * hydrateSingleString(const SBuffer & buf, uint32_t *d) {
   return ptr;
 }
 
-void hydrateSingleDevice(const SBuffer & buf_d, uint32_t version) {
+void hydrateSingleDevice(const SBuffer & buf_d, uint32_t version = 2) {
   uint32_t d = 1;   // index in device buffer
   uint16_t shortaddr = buf_d.get16(d);  d += 2;
   uint64_t longaddr  = buf_d.get64(d);  d += 8;
@@ -295,6 +292,11 @@ void hydrateDevices(const SBuffer &buf, uint32_t version) {
 
 // dump = true, only dump to logs, don't actually load
 void loadZigbeeDevices(bool dump_only = false) {
+#ifdef USE_ZIGBEE_EZSP
+  if (loadZigbeeDevicesFromEEPROM()) {
+    return;       // we succesfully loaded from EEPROM, skip the read from Flash
+  }
+#endif
 #ifdef ESP32
   // first copy SPI buffer into ram
   uint8_t *spi_buffer = (uint8_t*) malloc(z_spi_len);
@@ -318,7 +320,7 @@ void loadZigbeeDevices(bool dump_only = false) {
     // parse what seems to be a valid entry
     SBuffer buf(buf_len);
     buf.addBuffer(z_dev_start + sizeof(Z_Flashentry), buf_len);
-    AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "Zigbee devices data in Flash v%d (%d bytes)"), version, buf_len);
+    AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "Zigbee device information in %s (%d bytes)"), PSTR("Flash"), buf_len);
 
     if (dump_only) {
       size_t buf_len = buf.len();
@@ -332,7 +334,7 @@ void loadZigbeeDevices(bool dump_only = false) {
       zigbee_devices.clean();   // don't write back to Flash what we just loaded
     }
   } else {
-    AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "No zigbee devices data in Flash"));
+    AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "No Zigbee device information in %s"), PSTR("Flash"));
   }
 #ifdef ESP32
   free(spi_buffer);
@@ -340,9 +342,16 @@ void loadZigbeeDevices(bool dump_only = false) {
 }
 
 void saveZigbeeDevices(void) {
+#ifdef USE_ZIGBEE_EZSP
+  if (zigbee.eeprom_ready) {
+    if (hibernateDevicesInEEPROM()) {
+      return;   // saved in EEPROM successful, non need to write in Flash
+    }
+  }
+#endif
   SBuffer buf = hibernateDevices();
   size_t buf_len = buf.len();
-  if (buf_len > Z_MAX_FLASH) {
+  if (buf_len > 2040) {
     AddLog_P(LOG_LEVEL_ERROR, PSTR(D_LOG_ZIGBEE "Buffer too big to fit in Flash (%d bytes)"), buf_len);
     return;
   }
@@ -356,9 +365,10 @@ void saveZigbeeDevices(void) {
   // copy the flash into RAM to make local change, and write back the whole buffer
 #ifdef ESP8266
   ESP.flashRead(z_spi_start_sector * SPI_FLASH_SEC_SIZE, (uint32_t*) spi_buffer, SPI_FLASH_SEC_SIZE);
-#else  // ESP32
+#endif  // ESP8266
+#ifdef ESP32
   ZigbeeRead(&spi_buffer, z_spi_len);
-#endif  // ESP8266 - ESP32
+#endif  // ESP32
 
   Z_Flashentry *flashdata = (Z_Flashentry*)(spi_buffer + z_block_offset);
   flashdata->name = ZIGB_NAME2;     // v2
@@ -373,16 +383,20 @@ void saveZigbeeDevices(void) {
     ESP.flashWrite(z_spi_start_sector * SPI_FLASH_SEC_SIZE, (uint32_t*) spi_buffer, SPI_FLASH_SEC_SIZE);
   }
   AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "Zigbee Devices Data store in Flash (0x%08X - %d bytes)"), z_dev_start, buf_len);
-#else  // ESP32
+#endif  // ESP8266
+#ifdef ESP32
   ZigbeeWrite(&spi_buffer, z_spi_len);
-  AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "Zigbee Devices Data saved (%d bytes)"), buf_len);
-#endif  // ESP8266 - ESP32
+  AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "Zigbee Devices Data saved in %s (%d bytes)"), PSTR("Flash"), buf_len);
+#endif  // ESP32
   free(spi_buffer);
 }
 
 // Erase the flash area containing the ZigbeeData
 void eraseZigbeeDevices(void) {
   zigbee_devices.clean();     // avoid writing data to flash after erase
+#ifdef USE_ZIGBEE_EZSP
+  ZFS_Erase();
+#endif // USE_ZIGBEE_EZSP
 #ifdef ESP8266
   // first copy SPI buffer into ram
   uint8_t *spi_buffer = (uint8_t*) malloc(z_spi_len);
@@ -402,11 +416,24 @@ void eraseZigbeeDevices(void) {
   }
 
   free(spi_buffer);
-  AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "Zigbee Devices Data erased (0x%08X - %d bytes)"), z_dev_start, z_block_len);
-#else  // ESP32
+  AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "Zigbee Devices Data erased in %s"), PSTR("Flash"));
+#endif  // ESP8266
+#ifdef ESP32
   ZigbeeErase();
   AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_ZIGBEE "Zigbee Devices Data erased (%d bytes)"), z_block_len);
-#endif  // ESP8266 - ESP32
+#endif  // ESP32
+}
+
+void restoreDumpAllDevices(void) {
+  for (const auto & device : zigbee_devices.getDevices()) {
+    const SBuffer buf = hibernateDevicev2(device);
+    if (buf.len() > 0) {
+      char hex_char[buf.len()*2+2];
+      Response_P(PSTR("{\"" D_PRFX_ZB D_CMND_ZIGBEE_RESTORE "\":\"ZbRestore %s\"}"),
+                      ToHex_P(buf.buf(0), buf.len(), hex_char, sizeof(hex_char)));
+      MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_STAT, PSTR(D_PRFX_ZB D_CMND_ZIGBEE_DATA));
+    }
+  }
 }
 
 #endif // USE_ZIGBEE

@@ -361,7 +361,7 @@
 #define D_TRANSFER_STARTED "Transfer started"
 #define D_UPLOAD_ERR_1 "沒選擇任何檔案"
 #define D_UPLOAD_ERR_2 "可用空間不足"
-#define D_UPLOAD_ERR_3 "魔術數字(Magic byte)不是 0xE9"
+#define D_UPLOAD_ERR_3 "Invalid file signature"
 #define D_UPLOAD_ERR_4 "軟體刷入(Program flash)的大小超出實際記憶體的大小"
 #define D_UPLOAD_ERR_5 "上傳緩衝器不相符"
 #define D_UPLOAD_ERR_6 "上傳失敗。 啟用日誌記錄 3"
@@ -733,6 +733,7 @@
 #define D_SENSOR_MIEL_HVAC_RX  "MiEl HVAC Rx"
 #define D_SENSOR_SHELLY_DIMMER_BOOT0 "SHD Boot 0"
 #define D_SENSOR_SHELLY_DIMMER_RST_INV "SHD Reset"
+#define D_SENSOR_RC522_RST     "RC522 Rst"
 
 // Units
 #define D_UNIT_AMPERE "安培"

@@ -361,7 +361,7 @@
 #define D_TRANSFER_STARTED "Bắt đầu truyền tải"
 #define D_UPLOAD_ERR_1 "Không có tệp được chọn"
 #define D_UPLOAD_ERR_2 "Không đủ bộ nhớ"
-#define D_UPLOAD_ERR_3 "Magic byte is not 0xE9"
+#define D_UPLOAD_ERR_3 "Invalid file signature"
 #define D_UPLOAD_ERR_4 "Chương trình nâng cấp kích thước lớn hơn bộ nhớ thực tế"
 #define D_UPLOAD_ERR_5 "Bộ nhớ đệm tải lên không đủ"
 #define D_UPLOAD_ERR_6 "Tải lên thất bại. Bật bản ghi hệ thống mức 3"
@@ -733,6 +733,7 @@
 #define D_SENSOR_MIEL_HVAC_RX  "MiEl HVAC Rx"
 #define D_SENSOR_SHELLY_DIMMER_BOOT0 "SHD Boot 0"
 #define D_SENSOR_SHELLY_DIMMER_RST_INV "SHD Reset"
+#define D_SENSOR_RC522_RST     "RC522 Rst"
 
 // Units
 #define D_UNIT_AMPERE "A"

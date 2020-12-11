@@ -185,12 +185,13 @@ WiFiClient *g_client;
 SendEmail::SendEmail(const String& host, const int port, const String& user, const String& passwd, const int timeout, const int auth_used) :
     host(host), port(port), user(user), passwd(passwd), timeout(timeout), ssl(ssl), auth_used(auth_used), client(new BearSSL::WiFiClientSecure_light(1024,1024)) {
 }
-#else
+#endif  // ESP8266
+#ifdef ESP32
 WiFiClient *g_client;
 SendEmail::SendEmail(const String& host, const int port, const String& user, const String& passwd, const int timeout, const int auth_used) :
     host(host), port(port), user(user), passwd(passwd), timeout(timeout), ssl(ssl), auth_used(auth_used), client(new WiFiClientSecure()) {
 }
-#endif
+#endif  // ESP32
 
 String SendEmail::readClient() {
   delay(0);
@@ -331,11 +332,6 @@ String buffer;
     goto exit;
   }
 
-  buffer = F("MIME-Version: 1.0\r\n");
-  client->print(buffer);
-  buffer = F("Content-Type: Multipart/mixed; boundary=frontier\r\n");
-  client->print(buffer);
-
   buffer = F("From: ");
   buffer += from;
   client->println(buffer);
@@ -350,22 +346,27 @@ String buffer;
 #endif
   buffer = F("Subject: ");
   buffer += subject;
-  buffer += F("\r\n");
   client->println(buffer);
 #ifdef DEBUG_EMAIL_PORT
   AddLog_P(LOG_LEVEL_INFO, PSTR("%s"),buffer.c_str());
 #endif
 
-
 #ifdef USE_SCRIPT
   if (*msg=='*' && *(msg+1)==0) {
+    buffer = F("MIME-Version: 1.0\r\n");
+    client->print(buffer);
+    buffer = F("Content-Type: Multipart/mixed; boundary=frontier\r\n\r\n");
+    client->print(buffer);
+
     g_client=client;
     script_send_email_body(xsend_message_txt);
   } else {
+#endif
+    buffer = F("\r\n");
+    client->print(buffer);
     client->println(msg);
+#ifdef USE_SCRIPT
   }
-#else
-  client->println(msg);
 #endif
   client->println('.');
 #ifdef DEBUG_EMAIL_PORT

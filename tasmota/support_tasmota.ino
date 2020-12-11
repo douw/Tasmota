@@ -1194,13 +1194,14 @@ void Every250mSeconds(void)
 
 #ifdef ESP8266
         StartWebserver(Settings.webserver, WiFi.localIP());
-#else  // ESP32
+#endif  // ESP8266
+#ifdef ESP32
 #ifdef USE_ETHERNET
         StartWebserver(Settings.webserver, (EthernetLocalIP()) ? EthernetLocalIP() : WiFi.localIP());
 #else
         StartWebserver(Settings.webserver, WiFi.localIP());
 #endif
-#endif
+#endif  // ESP32
 
 #ifdef USE_DISCOVERY
 #ifdef WEBSERVER_ADVERTISE
@@ -1494,13 +1495,6 @@ void GpioInit(void)
   }
   SetModuleType();
 
-  TasmotaGlobal.module_changed = (Settings.module != Settings.last_module);
-  if (TasmotaGlobal.module_changed) {
-    Settings.baudrate = APP_BAUDRATE / 300;
-    Settings.serial_config = TS_SERIAL_8N1;
-    SetSerialBegin();
-  }
-
 //  AddLog_P(LOG_LEVEL_DEBUG, PSTR("DBG: Used GPIOs %d"), GPIO_SENSOR_END);
 
 #ifdef ESP8266
@@ -1513,8 +1507,8 @@ void GpioInit(void)
     }
   }
 
-  myio def_gp;
-  ModuleGpios(&def_gp);
+  myio template_gp;
+  TemplateGpios(&template_gp);
   for (uint32_t i = 0; i < ARRAY_SIZE(Settings.my_gp.io); i++) {
     if ((Settings.my_gp.io[i] >= AGPIO(GPIO_SENSOR_END)) && (Settings.my_gp.io[i] < AGPIO(GPIO_USER))) {
       Settings.my_gp.io[i] = GPIO_NONE;             // Fix not supported sensor ids in module
@@ -1522,8 +1516,8 @@ void GpioInit(void)
     else if (Settings.my_gp.io[i] > GPIO_NONE) {
       TasmotaGlobal.my_module.io[i] = Settings.my_gp.io[i];       // Set User selected Module sensors
     }
-    if ((def_gp.io[i] > GPIO_NONE) && (def_gp.io[i] < AGPIO(GPIO_USER))) {
-      TasmotaGlobal.my_module.io[i] = def_gp.io[i];               // Force Template override
+    if ((template_gp.io[i] > GPIO_NONE) && (template_gp.io[i] < AGPIO(GPIO_USER))) {
+      TasmotaGlobal.my_module.io[i] = template_gp.io[i];               // Force Template override
     }
   }
 
@@ -1596,16 +1590,17 @@ void GpioInit(void)
 #ifdef USE_SPI
   TasmotaGlobal.spi_enabled = (((PinUsed(GPIO_SPI_CS) && (Pin(GPIO_SPI_CS) > 14)) || (Pin(GPIO_SPI_CS) < 12)) || ((PinUsed(GPIO_SPI_DC) && (Pin(GPIO_SPI_DC) > 14)) || (Pin(GPIO_SPI_DC) < 12)));
   if (TasmotaGlobal.spi_enabled) {
-    TasmotaGlobal.my_module.io[12] = GPIO_SPI_MISO;
-    SetPin(12, GPIO_SPI_MISO);
-    TasmotaGlobal.my_module.io[13] = GPIO_SPI_MOSI;
-    SetPin(13, GPIO_SPI_MOSI);
-    TasmotaGlobal.my_module.io[14] = GPIO_SPI_CLK;
-    SetPin(14, GPIO_SPI_CLK);
+    TasmotaGlobal.my_module.io[12] = AGPIO(GPIO_SPI_MISO);
+    SetPin(12, AGPIO(GPIO_SPI_MISO));
+    TasmotaGlobal.my_module.io[13] = AGPIO(GPIO_SPI_MOSI);
+    SetPin(13, AGPIO(GPIO_SPI_MOSI));
+    TasmotaGlobal.my_module.io[14] = AGPIO(GPIO_SPI_CLK);
+    SetPin(14, AGPIO(GPIO_SPI_CLK));
     AddLog_P(LOG_LEVEL_DEBUG, PSTR("SPI: Using GPIO12(MISO), GPIO13(MOSI) and GPIO14(CLK)"));
   }
 #endif  // USE_SPI
-#else // ESP32
+#endif  // ESP8266
+#ifdef ESP32
 #ifdef USE_SPI
   if (PinUsed(GPIO_SPI_CS) || PinUsed(GPIO_SPI_DC)) {
     if ((15 == Pin(GPIO_SPI_CS)) && (!GetPin(12) && !GetPin(13) && !GetPin(14))) {  // HSPI
@@ -1657,7 +1652,7 @@ void GpioInit(void)
     }
   }
 #endif  // USE_SPI
-#endif  // ESP8266 - ESP32
+#endif  // ESP32
   TasmotaGlobal.soft_spi_enabled = (PinUsed(GPIO_SSPI_SCLK) && (PinUsed(GPIO_SSPI_MOSI) || PinUsed(GPIO_SSPI_MISO)));
 
   for (uint32_t i = 0; i < ARRAY_SIZE(TasmotaGlobal.my_module.io); i++) {
@@ -1719,9 +1714,10 @@ void GpioInit(void)
     if (PinUsed(GPIO_PWM1, i)) {
 #ifdef ESP8266
       pinMode(Pin(GPIO_PWM1, i), OUTPUT);
-#else  // ESP32
+#endif  // ESP8266
+#ifdef ESP32
       analogAttach(Pin(GPIO_PWM1, i), i);
-#endif
+#endif  // ESP32
       if (TasmotaGlobal.light_type) {
         // force PWM GPIOs to low or high mode, see #7165
         analogWrite(Pin(GPIO_PWM1, i), bitRead(TasmotaGlobal.pwm_inverted, i) ? Settings.pwm_range : 0);

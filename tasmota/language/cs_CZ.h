@@ -361,7 +361,7 @@
 #define D_TRANSFER_STARTED "Transfer started"
 #define D_UPLOAD_ERR_1 "Soubor nebyl vybrán"
 #define D_UPLOAD_ERR_2 "Málo místa"
-#define D_UPLOAD_ERR_3 "Magický byte má hodnotu jinou než 0xE9"
+#define D_UPLOAD_ERR_3 "Invalid file signature"
 #define D_UPLOAD_ERR_4 "Velikost programu je větší než skutečná velikost paměti flash"
 #define D_UPLOAD_ERR_5 "Chyba nahrávání, nesouhlasí porovnávané bity"
 #define D_UPLOAD_ERR_6 "Chyba nahrávání. Spuštěn zápis do logu na úrovni 3"
@@ -733,6 +733,7 @@
 #define D_SENSOR_MIEL_HVAC_RX  "MiEl HVAC Rx"
 #define D_SENSOR_SHELLY_DIMMER_BOOT0 "SHD Boot 0"
 #define D_SENSOR_SHELLY_DIMMER_RST_INV "SHD Reset"
+#define D_SENSOR_RC522_RST     "RC522 Rst"
 
 // Units
 #define D_UNIT_AMPERE "A"

@@ -94,7 +94,11 @@ void DeepSleepPrepare(void)
   if ((RtcSettings.nextwakeup == 0) ||
       (RtcSettings.deepsleep_slip < 9000) ||
       (RtcSettings.deepsleep_slip > 11000) ||
+#ifdef USE_DEEPSLEEP_LOCALTIME
+      (RtcSettings.nextwakeup > (LocalTime() + Settings.deepsleep))) {
+#else
       (RtcSettings.nextwakeup > (UtcTime() + Settings.deepsleep))) {
+#endif
     AddLog_P(LOG_LEVEL_ERROR, PSTR("DSL: Reset wrong settings wakeup: %ld, slip %ld"), RtcSettings.nextwakeup, RtcSettings.deepsleep_slip );
     RtcSettings.nextwakeup = 0;
     RtcSettings.deepsleep_slip = 10000;
@@ -102,13 +106,21 @@ void DeepSleepPrepare(void)
 
   // Timeslip in 0.1 seconds between the real wakeup and the calculated wakeup
   // Because deepsleep is in second and timeslip in 0.1 sec the compare always check if the slip is in the 10% range
+#ifdef USE_DEEPSLEEP_LOCALTIME
+  int16_t timeslip = (int16_t)(RtcSettings.nextwakeup + millis() / 1000 - LocalTime()) * 10;
+#else
   int16_t timeslip = (int16_t)(RtcSettings.nextwakeup + millis() / 1000 - UtcTime()) * 10;
+#endif
 
   // Allow 10% of deepsleep error to count as valid deepsleep; expecting 3-4%
   // if more then 10% timeslip = 0 == non valid wakeup; maybe manual
   timeslip = (timeslip < -(int32_t)Settings.deepsleep) ? 0 : (timeslip > (int32_t)Settings.deepsleep) ? 0 : 1;
   if (timeslip) {
+#ifdef USE_DEEPSLEEP_LOCALTIME
+    RtcSettings.deepsleep_slip = (Settings.deepsleep + RtcSettings.nextwakeup - LocalTime()) * RtcSettings.deepsleep_slip / tmax((Settings.deepsleep - (millis() / 1000)),5);
+#else
     RtcSettings.deepsleep_slip = (Settings.deepsleep + RtcSettings.nextwakeup - UtcTime()) * RtcSettings.deepsleep_slip / tmax((Settings.deepsleep - (millis() / 1000)),5);
+#endif
     // Avoid crazy numbers. Again maximum 10% deviation.
     RtcSettings.deepsleep_slip = tmin(tmax(RtcSettings.deepsleep_slip, 9000), 11000);
     RtcSettings.nextwakeup += Settings.deepsleep;
@@ -116,15 +128,35 @@ void DeepSleepPrepare(void)
 
   // It may happen that wakeup in just <5 seconds in future
   // In this case also add deepsleep to nextwakeup
+#ifdef USE_DEEPSLEEP_LOCALTIME
+  if (RtcSettings.nextwakeup <= (LocalTime() - DEEPSLEEP_MIN_TIME)) {
+#else
   if (RtcSettings.nextwakeup <= (UtcTime() - DEEPSLEEP_MIN_TIME)) {
+#endif
     // ensure nextwakeup is at least in the future
+#ifdef USE_DEEPSLEEP_LOCALTIME
+  #ifdef USE_DEEPSLEEP_OFFSET
+    RtcSettings.nextwakeup += LocalTime() + DEEPSLEEP_MIN_TIME;
+  #else
+    RtcSettings.nextwakeup += (((LocalTime() + DEEPSLEEP_MIN_TIME - RtcSettings.nextwakeup) / Settings.deepsleep) + 1) * Settings.deepsleep;
+  #endif
+#else
     RtcSettings.nextwakeup += (((UtcTime() + DEEPSLEEP_MIN_TIME - RtcSettings.nextwakeup) / Settings.deepsleep) + 1) * Settings.deepsleep;
+#endif
   }
 
+#ifdef USE_DEEPSLEEP_LOCALTIME
+  String dt = GetDT(RtcSettings.nextwakeup);
+#else
   String dt = GetDT(RtcSettings.nextwakeup + LocalTime() - UtcTime());  // 2017-03-07T11:08:02
+#endif
   // Limit sleeptime to DEEPSLEEP_MAX_CYCLE
   // uint32_t deepsleep_sleeptime = DEEPSLEEP_MAX_CYCLE < (RtcSettings.nextwakeup - UtcTime()) ? (uint32_t)DEEPSLEEP_MAX_CYCLE : RtcSettings.nextwakeup - UtcTime();
+#ifdef USE_DEEPSLEEP_LOCALTIME
+  deepsleep_sleeptime = tmin((uint32_t)DEEPSLEEP_MAX_CYCLE ,RtcSettings.nextwakeup - LocalTime());
+#else
   deepsleep_sleeptime = tmin((uint32_t)DEEPSLEEP_MAX_CYCLE ,RtcSettings.nextwakeup - UtcTime());
+#endif
 
   // stat/tasmota/STATUS = {"DeepSleep":{"Time":"2019-11-12T21:33:45","Epoch":1573590825}}
   Response_P(PSTR("{\"" D_PRFX_DEEPSLEEP "\":{\"" D_JSON_TIME "\":\"%s\",\"Epoch\":%d}}"), (char*)dt.c_str(), RtcSettings.nextwakeup);
@@ -139,7 +171,11 @@ void DeepSleepStart(void)
   AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_APPLICATION "Sleeping"));  // Won't show in GUI
 
   WifiShutdown();
+#ifdef USE_DEEPSLEEP_LOCALTIME
+  RtcSettings.ultradeepsleep = RtcSettings.nextwakeup - LocalTime();
+#else
   RtcSettings.ultradeepsleep = RtcSettings.nextwakeup - UtcTime();
+#endif
   RtcSettingsSave();
 #ifdef ESP8266
   ESP.deepSleep(100 * RtcSettings.deepsleep_slip * deepsleep_sleeptime);

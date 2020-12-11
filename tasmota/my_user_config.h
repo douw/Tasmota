@@ -462,6 +462,8 @@
 #define USE_ARILUX_RF                            // Add support for Arilux RF remote controller (+0k8 code, 252 iram (non 2.3.0))
 #define USE_SHUTTER                              // Add Shutter support for up to 4 shutter with different motortypes (+11k code)
 #define USE_DEEPSLEEP                            // Add support for deepsleep (+1k code)
+// #define USE_DEEPSLEEP_LOCALTIME               // Use LocalTime instead of UtcTime to calculate next wake up
+// #define USE_DEEPSLEEP_OFFSET                  // Calculate wakeup time from current time instead off midnight UTC, must be used with USE_DEEPSLEEP_LOCALTIME
 #define USE_EXS_DIMMER                           // Add support for ES-Store WiFi Dimmer (+1k5 code)
 //  #define EXS_MCU_CMNDS                          // Add command to send MCU commands (+0k8 code)
 //#define USE_HOTPLUG                              // Add support for sensor HotPlug

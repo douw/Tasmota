@@ -1899,32 +1899,6 @@ void SetSyslog(uint32_t loglevel)
   TasmotaGlobal.syslog_timer = 0;
 }
 
-#ifdef USE_WEBSERVER
-void GetLog(uint32_t idx, char** entry_pp, size_t* len_p)
-{
-  char* entry_p = nullptr;
-  size_t len = 0;
-
-  if (idx) {
-    char* it = TasmotaGlobal.web_log;
-    do {
-      uint32_t cur_idx = *it;
-      it++;
-      size_t tmp = strchrspn(it, '\1');
-      tmp++;                             // Skip terminating '\1'
-      if (cur_idx == idx) {              // Found the requested entry
-        len = tmp;
-        entry_p = it;
-        break;
-      }
-      it += tmp;
-    } while (it < TasmotaGlobal.web_log + WEB_LOG_SIZE && *it != '\0');
-  }
-  *entry_pp = entry_p;
-  *len_p = len;
-}
-#endif  // USE_WEBSERVER
-
 void Syslog(void)
 {
   // Destroys TasmotaGlobal.log_data
@@ -1935,14 +1909,14 @@ void Syslog(void)
     WiFi.hostByName(SettingsText(SET_SYSLOG_HOST), syslog_host_addr);  // If sleep enabled this might result in exception so try to do it once using hash
   }
   if (PortUdp.beginPacket(syslog_host_addr, Settings.syslog_port)) {
-    char syslog_preamble[64];  // Hostname + Id
+    char syslog_preamble[64];              // Hostname + Id
     snprintf_P(syslog_preamble, sizeof(syslog_preamble), PSTR("%s ESP-"), NetworkHostname());
     memmove(TasmotaGlobal.log_data + strlen(syslog_preamble), TasmotaGlobal.log_data, sizeof(TasmotaGlobal.log_data) - strlen(syslog_preamble));
     TasmotaGlobal.log_data[sizeof(TasmotaGlobal.log_data) -1] = '\0';
     memcpy(TasmotaGlobal.log_data, syslog_preamble, strlen(syslog_preamble));
     PortUdp_write(TasmotaGlobal.log_data, strlen(TasmotaGlobal.log_data));
     PortUdp.endPacket();
-    delay(1);  // Add time for UDP handling (#5512)
+    delay(1);                              // Add time for UDP handling (#5512)
   } else {
     TasmotaGlobal.syslog_level = 0;
     TasmotaGlobal.syslog_timer = SYSLOG_TIMER;
@@ -1950,50 +1924,94 @@ void Syslog(void)
   }
 }
 
-void AddLog(uint32_t loglevel)
-{
-  char mxtime[10];  // "13:45:21 "
-  snprintf_P(mxtime, sizeof(mxtime), PSTR("%02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d "), RtcTime.hour, RtcTime.minute, RtcTime.second);
+void SyslogAsync(void) {
+  static uint32_t counter = 1;
+
+  if (!TasmotaGlobal.syslog_level ||
+      (counter == TasmotaGlobal.log_buffer_pointer) ||
+      TasmotaGlobal.global_state.network_down) { return; }
+
+  do {
+    char* tmp;
+    size_t len;
+    uint32_t loglevel = GetLog(counter, &tmp, &len);
+    if ((len > 13) &&
+        (loglevel <= TasmotaGlobal.syslog_level) &&
+        (TasmotaGlobal.masterlog_level <= TasmotaGlobal.syslog_level)) {
+      strlcpy(TasmotaGlobal.log_data, tmp +13, len -13);  // Skip mxtime
+      Syslog();
+    }
+    counter++;
+    counter &= 0xFF;
+    if (!counter) { counter++; }           // Skip 0 as it is not allowed
+  } while (counter != TasmotaGlobal.log_buffer_pointer);
+}
+
+uint32_t GetLog(uint32_t idx, char** entry_pp, size_t* len_p) {
+  char* entry_p = nullptr;
+  size_t len = 0;
+  uint32_t loglevel = 0;
+  if (idx) {
+    char* it = TasmotaGlobal.log_buffer;
+    do {
+      uint32_t cur_idx = *it;
+      it++;
+      size_t tmp = strchrspn(it, '\1');
+      tmp++;                               // Skip terminating '\1'
+      if (cur_idx == idx) {                // Found the requested entry
+        loglevel = *it - '0';
+        it++;                              // Skip loglevel
+        len = tmp -1;
+        entry_p = it;
+        break;
+      }
+      it += tmp;
+    } while (it < TasmotaGlobal.log_buffer + LOG_BUFFER_SIZE && *it != '\0');
+  }
+  *entry_pp = entry_p;
+  *len_p = len;
+
+  return loglevel;
+}
+
+void AddLog(uint32_t loglevel) {
+//  char mxtime[10];  // "13:45:21 "
+//  snprintf_P(mxtime, sizeof(mxtime), PSTR("%02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d "), RtcTime.hour, RtcTime.minute, RtcTime.second);
+  char mxtime[14];  // "13:45:21.999 "
+  snprintf_P(mxtime, sizeof(mxtime), PSTR("%02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d.%03d "), RtcTime.hour, RtcTime.minute, RtcTime.second, RtcMillis());
 
   if ((loglevel <= TasmotaGlobal.seriallog_level) &&
       (TasmotaGlobal.masterlog_level <= TasmotaGlobal.seriallog_level)) {
     Serial.printf("%s%s\r\n", mxtime, TasmotaGlobal.log_data);
   }
-#ifdef USE_WEBSERVER
-  if (Settings.webserver &&
-     (loglevel <= Settings.weblog_level) &&
-     (TasmotaGlobal.masterlog_level <= Settings.weblog_level)) {
+
+  uint32_t highest_loglevel = Settings.weblog_level;
+  if (Settings.mqttlog_level > highest_loglevel) { highest_loglevel = Settings.mqttlog_level; }
+  if (TasmotaGlobal.syslog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.syslog_level; }
+  if ((loglevel <= highest_loglevel) &&    // Log only when needed
+      (TasmotaGlobal.masterlog_level <= highest_loglevel)) {
     // Delimited, zero-terminated buffer of log lines.
-    // Each entry has this format: [index][log data]['\1']
-    TasmotaGlobal.web_log_index &= 0xFF;
-    if (!TasmotaGlobal.web_log_index) {
-      TasmotaGlobal.web_log_index++;       // Index 0 is not allowed as it is the end of char string
+    // Each entry has this format: [index][loglevel][log data]['\1']
+    TasmotaGlobal.log_buffer_pointer &= 0xFF;
+    if (!TasmotaGlobal.log_buffer_pointer) {
+      TasmotaGlobal.log_buffer_pointer++;  // Index 0 is not allowed as it is the end of char string
     }
-    while (TasmotaGlobal.web_log_index == TasmotaGlobal.web_log[0] ||  // If log already holds the next index, remove it
-           strlen(TasmotaGlobal.web_log) + strlen(TasmotaGlobal.log_data) + 13 > WEB_LOG_SIZE)  // 13 = web_log_index + mxtime + '\1' + '\0'
+    while (TasmotaGlobal.log_buffer_pointer == TasmotaGlobal.log_buffer[0] ||  // If log already holds the next index, remove it
+           strlen(TasmotaGlobal.log_buffer) + strlen(TasmotaGlobal.log_data) + strlen(mxtime) + 4 > LOG_BUFFER_SIZE)  // 4 = log_buffer_pointer + '\1' + '\0'
     {
-      char* it = TasmotaGlobal.web_log;
-      it++;                                // Skip web_log_index
+      char* it = TasmotaGlobal.log_buffer;
+      it++;                                // Skip log_buffer_pointer
       it += strchrspn(it, '\1');           // Skip log line
       it++;                                // Skip delimiting "\1"
-      memmove(TasmotaGlobal.web_log, it, WEB_LOG_SIZE -(it-TasmotaGlobal.web_log));  // Move buffer forward to remove oldest log line
+      memmove(TasmotaGlobal.log_buffer, it, LOG_BUFFER_SIZE -(it-TasmotaGlobal.log_buffer));  // Move buffer forward to remove oldest log line
     }
-    snprintf_P(TasmotaGlobal.web_log, sizeof(TasmotaGlobal.web_log), PSTR("%s%c%s%s\1"), TasmotaGlobal.web_log, TasmotaGlobal.web_log_index++, mxtime, TasmotaGlobal.log_data);
-    TasmotaGlobal.web_log_index &= 0xFF;
-    if (!TasmotaGlobal.web_log_index) {
-      TasmotaGlobal.web_log_index++;       // Index 0 is not allowed as it is the end of char string
+    snprintf_P(TasmotaGlobal.log_buffer, sizeof(TasmotaGlobal.log_buffer), PSTR("%s%c%c%s%s\1"),
+      TasmotaGlobal.log_buffer, TasmotaGlobal.log_buffer_pointer++, '0'+loglevel, mxtime, TasmotaGlobal.log_data);
+    TasmotaGlobal.log_buffer_pointer &= 0xFF;
+    if (!TasmotaGlobal.log_buffer_pointer) {
+      TasmotaGlobal.log_buffer_pointer++;  // Index 0 is not allowed as it is the end of char string
     }
   }
-#endif  // USE_WEBSERVER
-  if (Settings.flag.mqtt_enabled &&        // SetOption3 - Enable MQTT
-      !TasmotaGlobal.global_state.mqtt_down &&
-      (loglevel <= Settings.mqttlog_level) &&
-      (TasmotaGlobal.masterlog_level <= Settings.mqttlog_level)) { MqttPublishLogging(mxtime); }
-
-  if (!TasmotaGlobal.global_state.network_down &&
-      (loglevel <= TasmotaGlobal.syslog_level) &&
-      (TasmotaGlobal.masterlog_level <= TasmotaGlobal.syslog_level)) { Syslog(); }
-
   TasmotaGlobal.prepped_loglevel = 0;
 }
 
